@@ -8,6 +8,6 @@ const withPWA = require('next-pwa')({
 module.exports = withPWA({
   reactStrictMode: true,
   eslint: {
-    ignoreDuringBuilds: true, // ✅ this allows Vercel to build even if there are lint errors
+    ignoreDuringBuilds: true, // ✅ THIS IGNORES ESLINT ERRORS ON VERCEL
   },
 })
