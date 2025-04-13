@@ -88,29 +88,30 @@ export default function Home() {
     localStorage.setItem('theme', newTheme);
   };
 
-  const handleSave = async () => {
-    if (!mood || !user) return;
-    const today = new Date().toISOString().split('T')[0];
+ const handleSave = async () => {
+  if (!mood || !user) return;
+  const today = new Date().toISOString().split('T')[0];
 
-    const { error } = await supabase.from('moods').insert([
-      {
-        user_id: user.id,
-        date: today,
-        mood,
-        note,
-        created_at: new Date().toISOString(),
-      },
-    ]);
+  const { error } = await supabase.from('moods').insert([
+    {
+      user_id: user.id,
+      date: today,
+      mood,
+      note,
+      created_at: new Date().toISOString(),
+    },
+  ]);
 
-    if (error) {
-      console.error('Error saving mood:', error);
-      alert('Something went wrong saving your mood.');
-    } else {
-      setMood(null);
-      setNote('');
-      fetchHistory();
-    }
-  };
+  if (error) {
+    console.error('❌ Error saving mood:', error.message, error.details, error.hint);
+    alert('Something went wrong saving your mood.');
+  } else {
+    setMood(null);
+    setNote('');
+    fetchHistory();
+  }
+};
+
 
   const moods = ['😊', '😔', '😡', '😴', '😐', '😍', '😭', '🤯'];
   const moodColors: { [key: string]: string } = {
