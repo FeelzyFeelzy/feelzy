@@ -1,33 +1,90 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/router'
-import { User } from '@supabase/supabase-js'
+
+interface MoodEntry {
+  date: string
+  mood: string
+  note: string
+}
+
+interface FriendMood {
+  user_id: string
+  mood: string
+  note: string
+}
 
 export default function Home() {
   const [mood, setMood] = useState<string | null>(null)
   const [note, setNote] = useState('')
-  const [history, setHistory] = useState<{ date: string, mood: string, note: string }[]>([])
+  const [history, setHistory] = useState<MoodEntry[]>([])
   const [theme, setTheme] = useState<string>('pink')
-  const [user, setUser] = useState<User | null>(null)
-  const [friendsMoods, setFriendsMoods] = useState<{ user_id: string, mood: string, note: string }[]>([])
+  const [user, setUser] = useState<any>(null)
+  const [friendsMoods, setFriendsMoods] = useState<FriendMood[]>([])
   const router = useRouter()
 
-  // Login check
+  // Redirect to auth if not logged in
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    const checkUser = async () => {
+      const { data } = await supabase.auth.getSession()
       if (!data.session) {
         router.push('/auth')
       } else {
         setUser(data.session.user)
       }
-    })
+    }
+    checkUser()
   }, [router])
 
-  // Theme from localStorage
+  // Load user mood history and friends moods
   useEffect(() => {
-    const saved = localStorage.getItem('theme')
-    if (saved) setTheme(saved)
-  }, [])
+    if (!user) return
+    fetchHistory()
+    fetchFriendsMoods(user.id)
+  }, [user])
+
+  const fetchHistory = async () => {
+    if (!user) return
+    const { data, error } = await supabase
+      .from('moods')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (!error && data) {
+      setHistory(data)
+    }
+  }
+
+  const fetchFriendsMoods = async (userId: string) => {
+    const { data: friends } = await supabase
+      .from('friends')
+      .select('friend_id')
+      .eq('user_id', userId)
+      .eq('status', 'accepted')
+
+    const friendIds = friends?.map((f) => f.friend_id) || []
+
+    if (friendIds.length === 0) return
+
+    const { data: moods } = await supabase
+      .from('moods')
+      .select('*')
+      .in('user_id', friendIds)
+      .order('created_at', { ascending: false })
+
+    const latestMoods: FriendMood[] = []
+    const seen = new Set()
+
+    moods?.forEach((m: FriendMood) => {
+      if (!seen.has(m.user_id)) {
+        latestMoods.push(m)
+        seen.add(m.user_id)
+      }
+    })
+
+    setFriendsMoods(latestMoods)
+  }
 
   const handleThemeChange = (newTheme: string) => {
     setTheme(newTheme)
@@ -49,60 +106,14 @@ export default function Home() {
     ])
 
     if (error) {
-      alert('Error saving mood')
+      console.error('Error saving mood:', error)
+      alert('Something went wrong saving your mood.')
     } else {
       setMood(null)
       setNote('')
       fetchHistory()
     }
   }
-
-  const fetchHistory = async () => {
-    if (!user) return
-    const { data, error } = await supabase
-      .from('moods')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-
-    if (!error && data) setHistory(data)
-  }
-
-  const fetchFriendsMoods = async (userId: string) => {
-    const { data: friends } = await supabase
-      .from('friends')
-      .select('friend_id')
-      .eq('user_id', userId)
-      .eq('status', 'accepted')
-
-    const friendIds = friends?.map(f => f.friend_id) || []
-    if (friendIds.length === 0) return
-
-    const { data: moods } = await supabase
-      .from('moods')
-      .select('*')
-      .in('user_id', friendIds)
-      .order('created_at', { ascending: false })
-
-    const latest: typeof moods = []
-    const seen = new Set()
-
-    moods?.forEach(m => {
-      if (!seen.has(m.user_id)) {
-        latest.push(m)
-        seen.add(m.user_id)
-      }
-    })
-
-    setFriendsMoods(latest)
-  }
-
-  useEffect(() => {
-    if (user) {
-      fetchHistory()
-      fetchFriendsMoods(user.id)
-    }
-  }, [user])
 
   const moods = ['😊', '😔', '😡', '😴', '😐', '😍', '😭', '🤯']
   const moodColors: { [key: string]: string } = {
@@ -117,54 +128,57 @@ export default function Home() {
   }
 
   return (
-    <main className={`min-h-screen p-4 ${theme === 'pink' ? 'from-pink-50' : theme === 'blue' ? 'from-blue-50' : 'from-green-50'} bg-gradient-to-b to-white`}>
-      <div className="flex flex-col items-center">
-        <h1 className="text-5xl">🧠</h1>
-        <h2 className="text-3xl font-bold text-pink-600 mt-1">Feelzy</h2>
-        {user && (
-          <div className="text-sm text-gray-600 mt-1">
-            Hi, {user.email}
+    <main className={`min-h-screen p-4 flex flex-col items-center text-center
+      ${theme === 'pink' ? 'bg-pink-50' : theme === 'blue' ? 'bg-blue-50' : 'bg-green-50'}`}>
+      
+      <h1 className="text-4xl mb-2">🧠 Feelzy</h1>
+
+      {user && (
+        <div className="text-sm text-gray-600 mb-3">
+          Hi, {user.email}&nbsp;
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut()
+              router.push('/auth')
+            }}
+            className="text-pink-500 underline hover:text-pink-700"
+          >
+            Logout
+          </button>
+        </div>
+      )}
+
+      <div className="mb-4">
+        <p className="text-gray-700">How are you feeling today?</p>
+        <div className="grid grid-cols-4 gap-3 mt-3">
+          {moods.map((m) => (
             <button
-              onClick={async () => {
-                await supabase.auth.signOut()
-                router.push('/auth')
-              }}
-              className="ml-2 text-pink-500 underline hover:text-pink-700"
+              key={m}
+              onClick={() => setMood(m)}
+              className={`text-3xl p-2 rounded-full bg-white shadow-sm hover:scale-110 transition ${
+                mood === m ? 'scale-125 ring-2 ring-pink-400' : ''
+              }`}
             >
-              Logout
+              {m}
             </button>
-          </div>
-        )}
-        <p className="text-gray-600 text-sm mt-1 mb-3">Track your moods daily</p>
-        <div className="flex gap-2">
-          {['pink', 'blue', 'green'].map((c) => (
-            <button key={c} onClick={() => handleThemeChange(c)} className={`px-3 py-1 border rounded-full ${theme === c ? `bg-${c}-200 border-${c}-400` : 'bg-white'}`}>{c}</button>
           ))}
         </div>
       </div>
 
-      <p className="mt-6 mb-4 text-gray-700">How are you feeling today?</p>
-      <div className="grid grid-cols-4 gap-4 mb-4">
-        {moods.map(m => (
-          <button
-            key={m}
-            onClick={() => setMood(m)}
-            className={`text-3xl p-2 rounded-full bg-white shadow-sm hover:scale-110 transition ${mood === m ? 'scale-125 ring-2 ring-pink-400' : ''}`}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
-
       {mood && (
         <div className="mb-4 w-full max-w-md">
+          <p className="mb-2 text-gray-700">You picked: <span className="text-xl">{mood}</span></p>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Write a quick note..."
-            className="w-full p-2 border rounded-md"
+            className="w-full p-2 border rounded-md resize-none"
+            rows={3}
           />
-          <button onClick={handleSave} className="mt-3 bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600">
+          <button
+            onClick={handleSave}
+            className="mt-3 bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 transition"
+          >
             Save Mood
           </button>
         </div>
@@ -173,19 +187,15 @@ export default function Home() {
       <div className="w-full max-w-md mt-6">
         <h2 className="text-xl font-semibold mb-2 text-pink-600">Your Mood History</h2>
         <ul className="space-y-3">
-          {history.length === 0 ? (
-            <p className="text-sm text-gray-500 mb-3">No moods yet. Pick one above to start 👆</p>
-          ) : (
-            history.map(({ date, mood, note }) => (
-              <li key={date} className={`p-4 rounded-xl border shadow-md ${moodColors[mood] || 'bg-white'}`}>
-                <div className="flex justify-between">
-                  <span>{date}</span>
-                  <span className="text-xl">{mood}</span>
-                </div>
-                {note && <p className="text-sm text-gray-600 mt-1">{note}</p>}
-              </li>
-            ))
-          )}
+          {history.map(({ date, mood, note }) => (
+            <li key={date} className={`p-4 rounded-xl shadow border ${moodColors[mood] || 'bg-white'}`}>
+              <div className="flex justify-between">
+                <span className="font-semibold">{date}</span>
+                <span className="text-xl">{mood}</span>
+              </div>
+              {note && <p className="text-gray-600 mt-1">{note}</p>}
+            </li>
+          ))}
         </ul>
       </div>
 
@@ -194,12 +204,17 @@ export default function Home() {
           <h2 className="text-xl font-semibold mb-3 text-pink-600">Your Friends&apos; Moods</h2>
           <ul className="space-y-3">
             {friendsMoods.map((entry, index) => (
-              <li key={index} className={`p-4 rounded-xl border shadow-md ${moodColors[entry.mood] || 'bg-white'}`}>
+              <li
+                key={index}
+                className={`p-4 rounded-xl shadow-md border text-left ${moodColors[entry.mood] || 'bg-white'}`}
+              >
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-500">User: {entry.user_id}</span>
                   <span className="text-xl">{entry.mood}</span>
                 </div>
-                {entry.note && <p className="text-sm text-gray-600 mt-1">{entry.note}</p>}
+                {entry.note && (
+                  <p className="text-gray-600 text-sm mt-1">{entry.note}</p>
+                )}
               </li>
             ))}
           </ul>
