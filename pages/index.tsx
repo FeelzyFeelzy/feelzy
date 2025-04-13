@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabaseClient'
+import { useRouter } from 'next/router'
 
 export default function Home() {
   const [mood, setMood] = useState<string | null>(null)
@@ -6,11 +8,22 @@ export default function Home() {
   const [history, setHistory] = useState<{ date: string, mood: string, note: string }[]>([])
 const [selectedDate, setSelectedDate] = useState<string | null>(null)
 const [theme, setTheme] = useState<string>('pink')
+const [user, setUser] = useState<any>(null)
+const router = useRouter()
+const [friendsMoods, setFriendsMoods] = useState<any[]>([])
 
+// 1. User login check
 useEffect(() => {
-  const savedTheme = localStorage.getItem('theme')
-  if (savedTheme) setTheme(savedTheme)
+  supabase.auth.getSession().then(({ data }) => {
+    if (!data.session) {
+      router.push('/auth')
+    } else {
+      setUser(data.session.user)
+    }
+  })
 }, [])
+
+
 
 const handleThemeChange = (newTheme: string) => {
   setTheme(newTheme)
@@ -19,21 +32,47 @@ const handleThemeChange = (newTheme: string) => {
 
 
 
-  useEffect(() => {
-    const stored = localStorage.getItem('moodHistory')
-    if (stored) setHistory(JSON.parse(stored))
-  }, [])
+  const handleSave = async () => {
+  if (!mood || !user) return
+  const today = new Date().toISOString().split('T')[0]
 
-  const handleSave = () => {
-    if (!mood) return
-    const today = new Date().toISOString().split('T')[0]
-    const newEntry = { date: today, mood, note }
-    const updated = [newEntry, ...history.filter(e => e.date !== today)]
-    setHistory(updated)
-    localStorage.setItem('moodHistory', JSON.stringify(updated))
+  const { error } = await supabase.from('moods').insert([
+    {
+      user_id: user.id,
+      date: today,
+      mood,
+      note,
+      created_at: new Date().toISOString(),
+    },
+  ])
+
+  if (error) {
+    console.error('Error saving mood:', error)
+    alert('Something went wrong saving your mood.')
+  } else {
     setMood(null)
     setNote('')
+      }
+}
+// Load moods for current user
+const fetchHistory = async () => {
+  if (!user) return
+  const { data, error } = await supabase
+    .from('moods')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+
+  if (!error && data) {
+    setHistory(data)
   }
+}
+
+useEffect(() => {
+  fetchHistory()
+  fetchFriendsMoods(user?.id)
+}, [user])
+
 
   const moods = ['😊', '😔', '😡', '😴', '😐', '😍', '😭', '🤯']
 const moodColors: { [key: string]: string } = {
@@ -47,6 +86,35 @@ const moodColors: { [key: string]: string } = {
   '🤯': 'bg-orange-200',
 }
 
+const fetchFriendsMoods = async (userId: string) => {
+  const { data: friends } = await supabase
+    .from('friends')
+    .select('friend_id')
+    .eq('user_id', userId)
+    .eq('status', 'accepted')
+
+  const friendIds = friends?.map((f) => f.friend_id) || []
+
+  if (friendIds.length === 0) return
+
+  const { data: moods } = await supabase
+    .from('moods')
+    .select('*')
+    .in('user_id', friendIds)
+    .order('created_at', { ascending: false })
+
+  const latestMoods: any[] = []
+  const seen = new Set()
+
+  moods?.forEach((m) => {
+    if (!seen.has(m.user_id)) {
+      latestMoods.push(m)
+      seen.add(m.user_id)
+    }
+  })
+
+  setFriendsMoods(latestMoods)
+}
 
   return (
     <main className={`min-h-screen p-4 flex flex-col items-center text-center relative overflow-hidden
@@ -60,6 +128,21 @@ const moodColors: { [key: string]: string } = {
       <div className="flex flex-col items-center mb-6">
   <h1 className="text-5xl">🧠</h1>
   <h2 className="text-3xl font-bold text-pink-600 mt-1">Feelzy</h2>
+{user && (
+  <div className="text-sm text-gray-600 mt-1">
+    Hi, {user.email}{' '}
+    <button
+      onClick={async () => {
+        await supabase.auth.signOut()
+        router.push('/auth')
+      }}
+      className="ml-2 text-pink-500 underline hover:text-pink-700"
+    >
+      Logout
+    </button>
+  </div>
+)}
+
   <p className="text-gray-600 text-sm mt-1 mb-3">Track how you feel — one day at a time</p>
 
   <div className="flex gap-2">
@@ -194,6 +277,28 @@ const moodColors: { [key: string]: string } = {
   </div>
 )}
    
+{friendsMoods.length > 0 && (
+  <div className="w-full max-w-md mt-10">
+    <h2 className="text-xl font-semibold mb-3 text-pink-600">Your Friends' Moods</h2>
+    <ul className="space-y-3">
+      {friendsMoods.map((entry, index) => (
+        <li
+          key={index}
+          className={`p-4 rounded-xl shadow-md border text-left ${moodColors[entry.mood] || 'bg-white'}`}
+        >
+          <div className="flex justify-between">
+            <span className="text-sm text-gray-500">User: {entry.user_id}</span>
+            <span className="text-xl">{entry.mood}</span>
+          </div>
+          {entry.note && (
+            <p className="text-gray-600 text-sm mt-1">{entry.note}</p>
+          )}
+        </li>
+      ))}
+    </ul>
+  </div>
+)}
+
 </main>
   )
 }
