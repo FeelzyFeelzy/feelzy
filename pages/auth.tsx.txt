@@ -1,0 +1,73 @@
+import { useState } from 'react'
+import { supabase } from '@/lib/supabaseClient'
+import { useRouter } from 'next/router'
+
+export default function AuthPage() {
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [isSignUp, setIsSignUp] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleAuth = async () => {
+    setLoading(true)
+    setError(null)
+
+    const { error } = isSignUp
+      ? await supabase.auth.signUp({ email, password })
+      : await supabase.auth.signInWithPassword({ email, password })
+
+    if (error) {
+      setError(error.message)
+    } else {
+      router.push('/') // go to homepage on success
+    }
+
+    setLoading(false)
+  }
+
+  return (
+    <main className="min-h-screen flex flex-col items-center justify-center p-4 text-center">
+      <h1 className="text-2xl font-bold text-pink-600 mb-4">
+        {isSignUp ? 'Create an Account' : 'Log In to Feelzy'}
+      </h1>
+
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        className="mb-2 p-2 border rounded w-full max-w-sm"
+      />
+
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+        className="mb-2 p-2 border rounded w-full max-w-sm"
+      />
+
+      <button
+        onClick={handleAuth}
+        disabled={loading}
+        className="bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 transition mb-2"
+      >
+        {loading ? 'Please wait...' : isSignUp ? 'Sign Up' : 'Log In'}
+      </button>
+
+      {error && <p className="text-red-500 text-sm">{error}</p>}
+
+      <p className="mt-4 text-sm text-gray-600">
+        {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+        <button
+          className="text-pink-600 underline"
+          onClick={() => setIsSignUp(!isSignUp)}
+        >
+          {isSignUp ? 'Log in' : 'Sign up'}
+        </button>
+      </p>
+    </main>
+  )
+}
