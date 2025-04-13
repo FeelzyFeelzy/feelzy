@@ -23,7 +23,6 @@ export default function Home() {
   const [friendsMoods, setFriendsMoods] = useState<FriendMood[]>([])
   const router = useRouter()
 
-  // Redirect to auth if not logged in
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getSession()
@@ -36,7 +35,6 @@ export default function Home() {
     checkUser()
   }, [router])
 
-  // Load user mood history and friends moods
   useEffect(() => {
     if (!user) return
     fetchHistory()
@@ -128,36 +126,40 @@ export default function Home() {
   }
 
   return (
-    <main className={`min-h-screen p-4 flex flex-col items-center text-center
-      ${theme === 'pink' ? 'bg-pink-50' : theme === 'blue' ? 'bg-blue-50' : 'bg-green-50'}`}>
-      
-      <h1 className="text-4xl mb-2">🧠 Feelzy</h1>
-
-      {user && (
-        <div className="text-sm text-gray-600 mb-3">
-          Hi, {user.email}&nbsp;
+    <main className={`min-h-screen p-4 relative overflow-hidden ${theme === 'pink' ? 'bg-pink-50' : theme === 'blue' ? 'bg-blue-50' : 'bg-green-50'}`}>
+      <div className="absolute top-4 right-4">
+        {user && (
           <button
             onClick={async () => {
               await supabase.auth.signOut()
               router.push('/auth')
             }}
-            className="text-pink-500 underline hover:text-pink-700"
+            className="text-sm text-pink-500 underline hover:text-pink-700"
           >
             Logout
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
-      <div className="mb-4">
+      <div className="flex flex-col items-center mt-6">
+        <h1 className="text-4xl mb-2">🧠 Feelzy</h1>
+        {user && <p className="text-gray-600">Hi, {user.email}</p>}
+      </div>
+
+      <div className="flex justify-center gap-2 mt-4">
+        <button onClick={() => handleThemeChange('pink')} className={`px-3 py-1 rounded-full text-sm font-medium border ${theme === 'pink' ? 'bg-pink-200 border-pink-400' : 'bg-white'}`}>Blush 🌸</button>
+        <button onClick={() => handleThemeChange('blue')} className={`px-3 py-1 rounded-full text-sm font-medium border ${theme === 'blue' ? 'bg-blue-200 border-blue-400' : 'bg-white'}`}>Calm 🌊</button>
+        <button onClick={() => handleThemeChange('green')} className={`px-3 py-1 rounded-full text-sm font-medium border ${theme === 'green' ? 'bg-green-200 border-green-400' : 'bg-white'}`}>Fresh 🍃</button>
+      </div>
+
+      <div className="text-center mt-6">
         <p className="text-gray-700">How are you feeling today?</p>
         <div className="grid grid-cols-4 gap-3 mt-3">
           {moods.map((m) => (
             <button
               key={m}
               onClick={() => setMood(m)}
-              className={`text-3xl p-2 rounded-full bg-white shadow-sm hover:scale-110 transition ${
-                mood === m ? 'scale-125 ring-2 ring-pink-400' : ''
-              }`}
+              className={`text-3xl p-2 rounded-full bg-white shadow-sm hover:scale-110 transition ${mood === m ? 'scale-125 ring-2 ring-pink-400' : ''}`}
             >
               {m}
             </button>
@@ -166,8 +168,8 @@ export default function Home() {
       </div>
 
       {mood && (
-        <div className="mb-4 w-full max-w-md">
-          <p className="mb-2 text-gray-700">You picked: <span className="text-xl">{mood}</span></p>
+        <div className="mb-4 w-full max-w-md mx-auto mt-6">
+          <p className="mb-2 text-gray-700 text-center">You picked: <span className="text-xl">{mood}</span></p>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -177,14 +179,14 @@ export default function Home() {
           />
           <button
             onClick={handleSave}
-            className="mt-3 bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 transition"
+            className="mt-3 bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 transition w-full"
           >
             Save Mood
           </button>
         </div>
       )}
 
-      <div className="w-full max-w-md mt-6">
+      <div className="w-full max-w-md mx-auto mt-10">
         <h2 className="text-xl font-semibold mb-2 text-pink-600">Your Mood History</h2>
         <ul className="space-y-3">
           {history.map(({ date, mood, note }) => (
@@ -200,7 +202,7 @@ export default function Home() {
       </div>
 
       {friendsMoods.length > 0 && (
-        <div className="w-full max-w-md mt-10">
+        <div className="w-full max-w-md mx-auto mt-10">
           <h2 className="text-xl font-semibold mb-3 text-pink-600">Your Friends&apos; Moods</h2>
           <ul className="space-y-3">
             {friendsMoods.map((entry, index) => (
