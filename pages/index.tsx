@@ -124,9 +124,13 @@ export default function Home() {
     '🤯': 'bg-orange-200',
   };
 
+  const bgTheme = theme === 'pink' ? 'bg-gradient-to-br from-pink-100 via-white to-pink-50'
+                : theme === 'blue' ? 'bg-gradient-to-br from-blue-100 via-white to-blue-50'
+                : 'bg-gradient-to-br from-green-100 via-white to-green-50';
+
   return (
     <main
-      className={`min-h-screen p-6 bg-gradient-to-br from-pink-100 via-white to-pink-50 text-center ${theme}`}
+      className={`min-h-screen p-6 text-center ${bgTheme}`}
     >
       {user && (
         <div className="absolute top-6 right-6">
