@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/router';
 
 interface MoodEntry {
+  id: string;
   date: string;
   mood: string;
   note: string;
@@ -21,6 +22,7 @@ export default function Home() {
   const [theme, setTheme] = useState<string>('pink');
   const [user, setUser] = useState<any>(null);
   const [friendsMoods, setFriendsMoods] = useState<FriendMood[]>([]);
+  const [editId, setEditId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -73,7 +75,7 @@ export default function Home() {
     const latestMoods: FriendMood[] = [];
     const seen = new Set();
 
-    moods?.forEach((m: FriendMood) => {
+    moods?.forEach((m: any) => {
       if (!seen.has(m.user_id)) {
         latestMoods.push(m);
         seen.add(m.user_id);
@@ -88,30 +90,51 @@ export default function Home() {
     localStorage.setItem('theme', newTheme);
   };
 
- const handleSave = async () => {
-  if (!mood || !user) return;
-  const today = new Date().toISOString().split('T')[0];
+  const handleSave = async () => {
+    if (!mood || !user) return;
+    const today = new Date().toISOString().split('T')[0];
 
-  const { error } = await supabase.from('moods').insert([
-    {
-      user_id: user.id,
-      date: today,
-      mood,
-      note,
-      created_at: new Date().toISOString(),
-    },
-  ]);
+    if (editId) {
+      const { error } = await supabase
+        .from('moods')
+        .update({ mood, note })
+        .eq('id', editId);
+      if (error) {
+        console.error('Error updating mood:', error);
+        alert('Something went wrong updating your mood.');
+      }
+    } else {
+      const { error } = await supabase.from('moods').insert([
+        {
+          user_id: user.id,
+          date: today,
+          mood,
+          note,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      if (error) {
+        console.error('Error saving mood:', error);
+        alert('Something went wrong saving your mood.');
+      }
+    }
 
-  if (error) {
-    console.error('❌ Error saving mood:', error.message, error.details, error.hint);
-    alert('Something went wrong saving your mood.');
-  } else {
     setMood(null);
     setNote('');
+    setEditId(null);
     fetchHistory();
-  }
-};
+  };
 
+  const startEdit = (entry: MoodEntry) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (entry.date === today) {
+      setMood(entry.mood);
+      setNote(entry.note);
+      setEditId(entry.id);
+    } else {
+      alert("You can only edit today's mood.");
+    }
+  };
 
   const moods = ['😊', '😔', '😡', '😴', '😐', '😍', '😭', '🤯'];
   const moodColors: { [key: string]: string } = {
@@ -130,9 +153,7 @@ export default function Home() {
                 : 'bg-gradient-to-br from-green-100 via-white to-green-50';
 
   return (
-    <main
-      className={`min-h-screen p-6 text-center ${bgTheme}`}
-    >
+    <main className={`min-h-screen p-6 text-center ${bgTheme}`}>
       {user && (
         <div className="absolute top-6 right-6">
           <button
@@ -187,7 +208,7 @@ export default function Home() {
               onClick={handleSave}
               className="mt-3 bg-pink-500 text-white px-6 py-2 rounded-full hover:bg-pink-600 transition w-full"
             >
-              Save Mood
+              {editId ? 'Update Mood' : 'Save Mood'}
             </button>
           </div>
         )}
@@ -195,13 +216,22 @@ export default function Home() {
         <div className="mt-10 text-left">
           <h2 className="text-xl font-semibold text-pink-600 mb-3">Your Mood History</h2>
           <ul className="space-y-3">
-            {history.map(({ date, mood, note }) => (
-              <li key={date} className={`p-4 rounded-xl shadow border ${moodColors[mood] || 'bg-white'}`}>
-                <div className="flex justify-between">
-                  <span className="font-semibold">{date}</span>
-                  <span className="text-xl">{mood}</span>
+            {history.map(({ id, date, mood, note }) => (
+              <li key={id} className={`p-4 rounded-xl shadow border ${moodColors[mood] || 'bg-white'}`}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="font-semibold block">{date}</span>
+                    {note && <p className="text-gray-600 mt-1">{note}</p>}
+                  </div>
+                  {date === new Date().toISOString().split('T')[0] && (
+                    <button
+                      onClick={() => startEdit({ id, date, mood, note })}
+                      className="text-sm text-blue-500 underline hover:text-blue-700"
+                    >
+                      Edit
+                    </button>
+                  )}
                 </div>
-                {note && <p className="text-gray-600 mt-1">{note}</p>}
               </li>
             ))}
           </ul>
